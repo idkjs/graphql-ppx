@@ -336,7 +336,7 @@ let make_printed_query = (config, document) => {
   };
 };
 
-let wrap_module = (~loc as _, name: string, contents) => {
+let wrap_module = (~loc as _, ~module_type=?, name: string, contents) => {
   let loc = Location.none;
   {
     pstr_desc:
@@ -345,7 +345,18 @@ let wrap_module = (~loc as _, name: string, contents) => {
           txt: Generator_utils.capitalize_ascii(name),
           loc,
         },
-        pmb_expr: Mod.structure(contents),
+        pmb_expr: {
+          switch (module_type) {
+          | Some(module_type) => {
+              pmod_desc:
+                Pmod_constraint(Mod.structure(contents), module_type),
+              pmod_loc: loc,
+              pmod_attributes: [],
+            }
+          | None => Mod.structure(contents)
+          };
+        },
+
         pmb_attributes: [],
         pmb_loc: loc,
       }),
@@ -353,7 +364,8 @@ let wrap_module = (~loc as _, name: string, contents) => {
   };
 };
 
-let wrap_query_module = (~loc as _, definition, name, contents, config) => {
+let wrap_query_module =
+    (~loc as _, ~module_type=?, definition, name, contents, config) => {
   let loc = Location.none;
   let module_name = "Inner";
   let funct =
@@ -403,7 +415,7 @@ let wrap_query_module = (~loc as _, definition, name, contents, config) => {
     };
 
   switch (name) {
-  | Some(name) => [wrap_module(~loc, name, contents)]
+  | Some(name) => [wrap_module(~module_type?, ~loc, name, contents)]
   | None => contents
   };
 };
@@ -793,7 +805,7 @@ let generate_definition = config =>
       structure,
     );
 
-let generate_modules = (config, module_name, operations) => {
+let generate_modules = (config, module_name, module_type, operations) => {
   switch (operations) {
   | [] => []
   | [operation] =>
@@ -801,6 +813,7 @@ let generate_modules = (config, module_name, operations) => {
     | (definition, Some(name), contents, loc) =>
       wrap_query_module(
         ~loc,
+        ~module_type?,
         definition,
         switch (config.inline, module_name) {
         | (true, _) => None
@@ -811,7 +824,14 @@ let generate_modules = (config, module_name, operations) => {
         config,
       )
     | (definition, None, contents, loc) =>
-      wrap_query_module(~loc, definition, module_name, contents, config)
+      wrap_query_module(
+        ~loc,
+        ~module_type?,
+        definition,
+        module_name,
+        contents,
+        config,
+      )
     }
 
   | operations =>
@@ -842,7 +862,7 @@ let generate_modules = (config, module_name, operations) => {
       |> List.concat;
     switch (module_name) {
     | Some(module_name) => [
-        wrap_module(~loc=Location.none, module_name, contents),
+        wrap_module(~module_type?, ~loc=Location.none, module_name, contents),
       ]
     | None => contents
     };
